@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PASTEIN — Recent</title>
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/pastey.png"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Montserrat:wght@700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0b1326',
+                        'surface-container': '#171f33',
+                        'surface-container-low': '#131b2e',
+                        'surface-container-high': '#222a3d',
+                        primary: '#adc6ff',
+                        secondary: '#89ceff',
+                        'on-surface': '#dae2fd',
+                        'on-surface-variant': '#c2c6d6',
+                        'outline-variant': '#424754'
+                    },
+                    fontFamily: {
+                        geist: ['Geist', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    borderRadius: {
+                        lg: '1rem',
+                        xl: '1.5rem',
+                        full: '9999px'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-background font-inter text-on-surface flex flex-col" style="min-height:100vh;">
+    <header class="border-b border-outline-variant px-6 py-4 shrink-0">
+        <div class="max-w-[1200px] mx-auto flex items-center gap-3">
+            <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/pastey.png" alt="Logo" class="w-8 h-8"/>
+            <h1 class="font-geist font-bold text-primary text-xl">PASTEIN</h1>
+        </div>
+    </header>
+
+    <main class="max-w-[800px] w-full mx-auto px-4 py-8 flex-1">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="font-geist font-semibold text-2xl text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">history</span>
+                Recent Pastes
+            </h2>
+            <a href="/" class="btn-primary px-5 py-2.5 rounded-full font-geist font-semibold text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-lg">add</span>
+                New Paste
+            </a>
+        </div>
+
+        <div id="loading-state" class="glass-panel rounded-xl p-8 text-center text-on-surface-variant font-mono text-sm">
+            Memuat...
+        </div>
+
+        <div id="error-state" class="hidden glass-panel rounded-xl p-8 text-center">
+            <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-3">error</span>
+            <p class="text-on-surface-variant">Gagal memuat daftar paste.</p>
+        </div>
+
+        <div id="empty-state" class="hidden glass-panel rounded-xl p-8 text-center">
+            <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inventory_2</span>
+            <p class="text-on-surface-variant">Belum ada paste aktif</p>
+        </div>
+
+        <div id="recent-list" class="hidden space-y-3"></div>
+    </main>
+
+    <script>
+    (function () {
+        function timeAgo(s) {
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return '';
+            const sec = Math.floor((new Date() - d) / 1000);
+            if (sec < 60) return 'baru saja';
+            if (sec < 3600) return Math.floor(sec / 60) + ' menit lalu';
+            if (sec < 86400) return Math.floor(sec / 3600) + ' jam lalu';
+            return Math.floor(sec / 86400) + ' hari lalu';
+        }
+
+        function expiresLabel(item) {
+            if (item.permanent || !item.expires_at) return 'Permanen';
+            const ms = new Date(item.expires_at) - new Date();
+            if (ms <= 0) return 'Kedaluwarsa';
+            const m = Math.floor(ms / 60000);
+            if (m < 60) return 'Kedaluwarsa dalam ' + m + ' menit';
+            const h = Math.floor(m / 60);
+            if (h < 48) return 'Kedaluwarsa dalam ' + h + ' jam';
+            return 'Kedaluwarsa dalam ' + Math.floor(h / 24) + ' hari';
+        }
+
+        function fmtSize(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+            return (b / 1048576).toFixed(1) + ' MB';
+        }
+
+        function el(tag, cls, text) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text !== undefined) e.textContent = text;
+            return e;
+        }
+
+        function renderCard(item) {
+            const card = el('div', 'history-item rounded-xl');
+            card.appendChild(el('span', 'history-type', item.type === 'file' ? 'file' : 'teks'));
+
+            const mid = el('div', 'flex-1 min-w-0');
+            const title = item.type === 'file'
+                ? item.filename + ' (' + fmtSize(item.file_size || 0) + ')'
+                : ((item.content || '').length > 50 ? item.content.slice(0, 50) + '…' : (item.content || ''));
+            const link = el('a', 'block font-mono text-sm text-primary hover:underline truncate', title || '(kosong)');
+            link.href = '/' + item.slug;
+            mid.appendChild(link);
+
+            const meta = el('div', 'text-xs text-on-surface-variant font-mono mt-1');
+            meta.appendChild(el('span', '', timeAgo(item.created_at)));
+            meta.appendChild(el('span', 'mx-2', '·'));
+            meta.appendChild(el('span', '', expiresLabel(item)));
+            mid.appendChild(meta);
+            card.appendChild(mid);
+
+            const open = el('a', 'btn-primary px-4 py-2 rounded-full font-geist font-semibold text-xs flex items-center gap-1 shrink-0', 'Open');
+            open.href = '/' + item.slug;
+            card.appendChild(open);
+            return card;
+        }
+
+        fetch('/api/recent')
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(items => {
+                document.getElementById('loading-state').classList.add('hidden');
+                if (!items || items.length === 0) {
+                    document.getElementById('empty-state').classList.remove('hidden');
+                    return;
+                }
+                const list = document.getElementById('recent-list');
+                list.classList.remove('hidden');
+                items.forEach(item => list.appendChild(renderCard(item)));
+            })
+            .catch(() => {
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('error-state').classList.remove('hidden');
+            });
+    })();
+    </script>
+</body>
+</html>
