@@ -1,0 +1,5 @@
+data/
+paste-in
+pastein
+*.db
+.env
